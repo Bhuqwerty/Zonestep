@@ -40,7 +40,8 @@ class LocationTracker {
     _start = sessionStart;
     final settings = AndroidSettings(
       accuracy: LocationAccuracy.best,
-      distanceFilter: ultra ? 5 : 2,
+      // No distance filter: auto-pause needs fixes while standing still.
+      distanceFilter: 0,
       intervalDuration: Duration(seconds: ultra ? 4 : 1),
     );
     _sub = Geolocator.getPositionStream(locationSettings: settings).listen(_onPosition);
@@ -57,8 +58,9 @@ class LocationTracker {
       final dt = p.timestamp.difference(prev.timestamp).inMilliseconds / 1000;
       final v = dt > 0 ? d / dt : 0;
       // Ignore jumps faster than 12 m/s and sub-metre wobble while standing.
+      final wasMoving = moving || (p.speed >= 0.5);
       if (v < 12 && d > 0.8) {
-        if (moving || !autoPause) distance += d;
+        if (wasMoving || !autoPause) distance += d;
       } else if (v >= 12) {
         return;
       }
@@ -85,6 +87,14 @@ class LocationTracker {
       dist: distance,
       moving: moving,
     ));
+  }
+
+  /// Called every second: no fix for 6 s while auto-pause is on counts as
+  /// stopped (some phones stop reporting when stationary).
+  void checkStale() {
+    if (!autoPause) return;
+    final f = lastFix;
+    if (f != null && DateTime.now().difference(f).inSeconds >= (ultra ? 12 : 6)) moving = false;
   }
 
   Future<void> stop() async {

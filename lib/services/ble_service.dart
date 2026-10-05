@@ -37,6 +37,7 @@ class BleService extends ChangeNotifier {
 
   final Map<String, DiscoveredDevice> found = {};
   StreamSubscription<DiscoveredDevice>? _scanSub;
+  Timer? _scanTimer;
   bool scanning = false;
   String? scanError;
 
@@ -97,7 +98,8 @@ class BleService extends ChangeNotifier {
       scanning = false;
       notifyListeners();
     });
-    Timer(const Duration(seconds: 20), stopScan);
+    _scanTimer?.cancel();
+    _scanTimer = Timer(const Duration(seconds: 20), stopScan);
   }
 
   Future<void> stopScan() async {

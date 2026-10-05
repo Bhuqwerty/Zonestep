@@ -70,6 +70,7 @@ class _LiveScreenState extends State<LiveScreen> {
         if (c.plan.on(b)) b.name: b.label,
       for (final r in c.plan.rules)
         if (r.enabled) r.id: r.message,
+      if (c.plan.segments.length > 1) 'segment': 'Segment announcements',
     };
     showModalBottomSheet<void>(
       context: context,

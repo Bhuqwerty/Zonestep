@@ -46,6 +46,7 @@ class _RunSetupScreenState extends State<RunSetupScreen> {
 
   Future<void> _pickDefault() async {
     final d = await AppDb.I.defaultPlanFor(distanceM);
+    if (!mounted) return;
     setState(() {
       chosen = d;
       edited = null;
@@ -380,6 +381,13 @@ Future<void> startSession(BuildContext context, AlertPlan plan) async {
     snack(context, 'A session is already running.');
     return;
   }
+  // Android 14 only lets the session's background service start while
+  // "Nearby devices" is granted, so re-check it (it can be auto-revoked).
+  if (!await BleService.I.ensurePermissions()) {
+    if (context.mounted) snack(context, 'Zonestep needs the "Nearby devices" permission to read your strap.');
+    return;
+  }
+  if (!context.mounted) return;
   final dev = AppState.I.device;
   if (dev == null) {
     final d = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen()));
@@ -406,8 +414,11 @@ Future<void> startSession(BuildContext context, AlertPlan plan) async {
   final ok = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => const _SignalCheck());
   if (ok != true || !context.mounted) return;
   final c = SessionController(plan: plan, profile: AppState.I.profile);
-  await c.begin();
+  final kept = await c.begin();
   if (!context.mounted) return;
+  if (!kept) {
+    snack(context, 'Android would not keep Zonestep running in the background. Keep the screen on, or check app permissions.');
+  }
   Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LiveScreen(controller: c)));
 }
 

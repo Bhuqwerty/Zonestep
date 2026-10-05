@@ -169,7 +169,7 @@ class SessionRecord {
         'device_id': deviceId,
         'device_kind': deviceKind,
         'moving_s': movingS,
-        'summary': summary == null ? null : jsonEncode(summary),
+        'summary': summary == null ? null : jsonEncode(_finite(summary)),
         'recovery_start': recoveryStartBpm,
         'recovery_end': recoveryEndBpm,
         'manual_distance': manualDistanceM,
@@ -196,6 +196,14 @@ class SessionRecord {
         manualWatts: (r['manual_watts'] as num?)?.toDouble(),
         muted: r['muted'] == null ? [] : (jsonDecode(r['muted'] as String) as List).cast<String>(),
       );
+}
+
+/// JSON cannot hold NaN or infinity; drop them rather than fail the save.
+Object? _finite(Object? v) {
+  if (v is double) return v.isFinite ? v : null;
+  if (v is Map) return {for (final e in v.entries) e.key.toString(): _finite(e.value)};
+  if (v is List) return [for (final x in v) _finite(x)];
+  return v;
 }
 
 class SessionData {

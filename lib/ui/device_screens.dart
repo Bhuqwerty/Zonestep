@@ -8,6 +8,7 @@ import '../core/models.dart';
 import '../services/app_state.dart';
 import '../services/ble_service.dart';
 import '../services/foreground.dart';
+import '../services/session_controller.dart';
 import '../services/voice_service.dart';
 import 'widgets.dart';
 
@@ -151,7 +152,7 @@ class _DeviceTestScreenState extends State<DeviceTestScreen> with WidgetsBinding
     WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _timer?.cancel();
-    ForegroundSession.stop();
+    if (SessionController.active == null) ForegroundSession.stop();
     super.dispose();
   }
 
@@ -276,7 +277,10 @@ class _DeviceTestScreenState extends State<DeviceTestScreen> with WidgetsBinding
 
   Future<void> _startLock() async {
     _waitingUser = false;
-    await ForegroundSession.start(withLocation: false, text: 'Device test: screen lock check');
+    // Never replace a running session's service (it may carry GPS).
+    if (SessionController.active == null) {
+      await ForegroundSession.start(withLocation: false, text: 'Device test: screen lock check');
+    }
     _set('lock', 'running', 'Lock your phone now. Unlock it when you hear "test done" (about 30 seconds).');
     _readings.clear();
   }
@@ -319,7 +323,7 @@ class _DeviceTestScreenState extends State<DeviceTestScreen> with WidgetsBinding
         _set('lock', 'fail',
             'Readings stopped with the screen locked (${rs.length} in $secs s). Allow Zonestep to run in the background.');
       }
-      ForegroundSession.stop();
+      if (SessionController.active == null) ForegroundSession.stop();
       setState(() {
         step = _Step.voice;
         _waitingUser = true;

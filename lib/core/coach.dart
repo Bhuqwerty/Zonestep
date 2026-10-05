@@ -193,8 +193,9 @@ class Coach {
     RuleDelivery delivery = RuleDelivery.voice,
     String category = 'coach',
     bool safety = false,
+    String? muteKey,
   }) {
-    if (muted.contains(key)) return false;
+    if (muted.contains(key) || (muteKey != null && muted.contains(muteKey))) return false;
     final cd = cooldown ?? defaultCooldown;
     final last = _lastFired[key];
     if (last != null && t - last < cd) return false;
@@ -304,7 +305,8 @@ class Coach {
     final b = i.battery;
     if (b != null && b <= 15 && !_batteryWarned) {
       _batteryWarned = true;
-      _fire(out, 'battery', 'Sensor battery', 'Heart rate sensor battery low, $b percent.', 2, i.t, cooldown: 0);
+      _fire(out, 'battery', 'Sensor battery', 'Heart rate sensor battery low, $b percent.', 2, i.t,
+          cooldown: 0, muteKey: BuiltIn.sensor.name);
     }
   }
 
@@ -497,18 +499,18 @@ class Coach {
       phase = IntervalPhase.work;
       round = 1;
       _phaseStart = i.t;
-      _fire(out, 'interval_work', 'Interval timer', 'Work, round 1 of ${it.rounds}. Go.', 2, i.t, cooldown: 0);
+      _fire(out, 'interval_work', 'Interval timer', 'Work, round 1 of ${it.rounds}. Go.', 2, i.t, cooldown: 0, muteKey: BuiltIn.intervals.name);
       return;
     }
     final inPhase = i.t - _phaseStart;
     if (phase == IntervalPhase.work && inPhase >= it.workSec) {
       if (round >= it.rounds) {
         phase = IntervalPhase.done;
-        _fire(out, 'interval_done', 'Interval timer', 'Intervals done. Easy now.', 2, i.t, cooldown: 0);
+        _fire(out, 'interval_done', 'Interval timer', 'Intervals done. Easy now.', 2, i.t, cooldown: 0, muteKey: BuiltIn.intervals.name);
       } else {
         phase = IntervalPhase.rest;
         _phaseStart = i.t;
-        _fire(out, 'interval_rest', 'Interval timer', 'Rest.', 2, i.t, cooldown: 0);
+        _fire(out, 'interval_rest', 'Interval timer', 'Rest.', 2, i.t, cooldown: 0, muteKey: BuiltIn.intervals.name);
       }
     } else if (phase == IntervalPhase.rest) {
       final recovered = it.endRestOnRecovery && inPhase >= 15 && smoothed != null && smoothed! <= zones.recoveryLevel;
@@ -518,7 +520,7 @@ class Coach {
         _phaseStart = i.t;
         final why = recovered && inPhase < it.restSec ? 'Recovered. ' : '';
         _fire(out, 'interval_work', 'Interval timer', '${why}Rest over, go. Round $round of ${it.rounds}.', 2, i.t,
-            cooldown: 0);
+            cooldown: 0, muteKey: BuiltIn.intervals.name);
       }
     }
   }
@@ -555,7 +557,7 @@ class Coach {
     _nextSplit += _splitUnit;
 
     final unitWord = metric ? 'Kilometre' : 'Mile';
-    final pace = fmtPace(secs / (_splitUnit / 1000), metric: true);
+    final pace = fmtPace(secs / (_splitUnit / 1000), metric: metric);
     var msg = '$unitWord $idx, ${_spokenPace(pace)} pace';
     if (avg != null) msg += ', average heart rate ${avg.round()}';
     if (plan.kcalWithSplit && i.kcal >= 1) msg += ', ${i.kcal.round()} kcal so far';

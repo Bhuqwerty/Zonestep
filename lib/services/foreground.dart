@@ -22,16 +22,21 @@ class ForegroundSession {
         allowWakeLock: true,
         autoRunOnBoot: false,
         autoRunOnMyPackageReplaced: false,
+        // The session lives in the app's main isolate, so if the app is
+        // swiped away the service must go with it rather than restart empty.
+        stopWithTask: true,
+        allowAutoRestart: false,
       ),
     );
     _initialised = true;
   }
 
-  static Future<void> start({required bool withLocation, required String text}) async {
+  /// Returns false if Android refused to start the service.
+  static Future<bool> start({required bool withLocation, required String text}) async {
     init();
     await Permission.notification.request();
     if (await FlutterForegroundTask.isRunningService) await FlutterForegroundTask.stopService();
-    await FlutterForegroundTask.startService(
+    final r = await FlutterForegroundTask.startService(
       serviceTypes: [
         ForegroundServiceTypes.connectedDevice,
         if (withLocation) ForegroundServiceTypes.location,
@@ -39,6 +44,7 @@ class ForegroundSession {
       notificationTitle: 'Zonestep session running',
       notificationText: text,
     );
+    return r is ServiceRequestSuccess;
   }
 
   static Future<void> update(String title, String text) async {

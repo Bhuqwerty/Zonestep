@@ -277,8 +277,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
       for (var i = 0; i < hr.length; i += step)
         if (hr[i].contact) FlSpot(hr[i].tMs / 60000, hr[i].bpm.toDouble()) else FlSpot.nullSpot,
     ];
-    final minY = math.max(40, hr.map((h) => h.bpm).reduce(math.min) - 10).toDouble();
-    final maxY = math.min(230, hr.map((h) => h.bpm).reduce(math.max) + 10).toDouble();
+    final clean = hr.where((h) => h.contact && h.bpm >= 30).map((h) => h.bpm).toList();
+    if (clean.isEmpty) return const Center(child: Text('No clean heart rate recorded.'));
+    final minY = math.max(30, clean.reduce(math.min) - 10).toDouble();
+    final maxY = math.max(minY + 20, math.min(230, clean.reduce(math.max) + 10)).toDouble();
     final alertsX = data!.alerts.map((a) => a.tMs / 60000).toList();
     final gps = data!.gps;
     final paceSpots = <FlSpot>[];
@@ -586,7 +588,8 @@ class _RouteMapState extends State<_RouteMap> {
     return Stack(children: [
       FlutterMap(
         options: MapOptions(
-          initialCameraFit: CameraFit.bounds(bounds: LatLngBounds.fromPoints(pts), padding: const EdgeInsets.all(32)),
+          initialCameraFit:
+              CameraFit.bounds(bounds: LatLngBounds.fromPoints(pts), padding: const EdgeInsets.all(32), maxZoom: 18),
           onTap: (_, p) {
             var best = 0;
             var bestD = double.infinity;

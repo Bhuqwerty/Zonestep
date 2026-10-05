@@ -227,8 +227,12 @@ class AppDb {
 
   /// Last sample time for a session, used to close sessions after a crash.
   Future<int?> lastSampleT(int sessionId) async {
-    final r = await db.rawQuery('SELECT MAX(t) AS t FROM hr_samples WHERE session_id = ?', [sessionId]);
-    return r.first['t'] as int?;
+    final h = await db.rawQuery('SELECT MAX(t) AS t FROM hr_samples WHERE session_id = ?', [sessionId]);
+    final g = await db.rawQuery('SELECT MAX(t) AS t FROM gps_points WHERE session_id = ?', [sessionId]);
+    final a = h.first['t'] as int?, b = g.first['t'] as int?;
+    if (a == null) return b;
+    if (b == null) return a;
+    return a > b ? a : b;
   }
 
   // --- Plans ------------------------------------------------------------------

@@ -60,6 +60,7 @@ class SessionController extends ChangeNotifier {
   double waterMl = 0;
   int _tickN = 0;
   double recoveryLeft = 60;
+  double _pausedS = 0;
   DateTime? _endAt;
 
   bool get isRun => plan.kind == SessionKind.run;
@@ -67,7 +68,8 @@ class SessionController extends ChangeNotifier {
   double? get distance => tracker?.distance;
   bool get autoPaused => isRun && tracker != null && !tracker!.moving;
 
-  Future<void> begin() async {
+  /// Returns false when the background service could not start.
+  Future<bool> begin() async {
     coach = Coach(plan: plan, zones: profile.zones, metric: profile.metric, defaultCooldown: profile.defaultCooldownSec);
     start = DateTime.now();
     final dev = AppState.I.device;
@@ -84,15 +86,17 @@ class SessionController extends ChangeNotifier {
     record.id = await AppDb.I.insertSession(record);
     active = this;
 
-    await ForegroundSession.start(withLocation: isRun, text: 'Starting…');
+    final kept = await ForegroundSession.start(withLocation: isRun, text: 'Starting…');
     VoiceService.I.delivery = profile.delivery;
 
     _hrSub = BleService.I.readings.listen((r) {
+      // The beats in a notification happened before it arrived.
       final t = r.at.difference(start).inMilliseconds;
+      final total = r.reading.rrMs.fold<double>(0, (a, b) => a + b);
       var acc = 0.0;
       for (final rr in r.reading.rrMs) {
         acc += rr;
-        _rrBuf.add(RrPoint(t + acc.round(), rr));
+        _rrBuf.add(RrPoint(t - (total - acc).round(), rr));
       }
     });
 
@@ -110,6 +114,7 @@ class SessionController extends ChangeNotifier {
         : plan.activity;
     unawaited(VoiceService.I.alert('Session started. $goal. Good luck.'));
     notifyListeners();
+    return kept;
   }
 
   void _tick() {
@@ -129,6 +134,8 @@ class SessionController extends ChangeNotifier {
       _hrBuf.add(HrSample((t * 1000).round(), reading.bpm, reading.hasContact));
     }
 
+    if (manualPause) _pausedS += 1;
+    tracker?.checkStale();
     final isMoving = !manualPause && (!isRun || (tracker?.moving ?? true));
     if (isMoving) movingS += 1;
 
@@ -137,8 +144,10 @@ class SessionController extends ChangeNotifier {
       if (b != null && contactOk && profile.canEstimateCalories) {
         kcal += keytelKcalPerMin(bpm: b.toDouble(), age: profile.age!, weightKg: profile.weightKg!, sex: profile.sex) / 60;
       }
+      // The coach's clock skips manual pauses so holds and interval phases
+      // don't run on while paused.
       final events = coach.tick(CoachInput(
-        t: t,
+        t: t - _pausedS,
         moving: movingS,
         rawBpm: bpm?.toDouble(),
         contactOk: contactOk,
@@ -272,12 +281,17 @@ class SessionController extends ChangeNotifier {
     record.end = _endAt ?? DateTime.now();
     record.movingS = movingS;
     record.muted = coach.muted.toList();
-    await AppDb.I.updateSession(record);
-    await ForegroundSession.stop();
-    await finaliseSession(record, profile);
-    active = null;
-    unawaited(VoiceService.I.say(_closingLine()));
-    notifyListeners();
+    try {
+      await AppDb.I.updateSession(record);
+      await finaliseSession(record, profile);
+      unawaited(VoiceService.I.say(_closingLine()));
+    } catch (e) {
+      debugPrint('finalise failed: $e');
+    } finally {
+      await ForegroundSession.stop();
+      active = null;
+      notifyListeners();
+    }
   }
 
   String _closingLine() {
@@ -317,7 +331,7 @@ Future<Map<String, dynamic>> finaliseSession(SessionRecord record, Profile profi
 /// Closes sessions left open by a crash or a killed app.
 Future<void> recoverUnfinished(Profile profile) async {
   for (final s in await AppDb.I.unfinishedSessions()) {
-    final last = await AppDb.I.lastSampleT(s.id!);
+    final last = await AppDb.I.lastSampleT(s.id!); // HR or GPS, whichever is later
     if (last == null || last < 60000) {
       await AppDb.I.deleteSession(s.id!);
       continue;
