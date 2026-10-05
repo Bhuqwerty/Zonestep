@@ -106,3 +106,8 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# permission_handler_android 14.x needs Android Gradle Plugin 9; stay on the
+# AGP 8 compatible line until the app moves to AGP 9.
+dependency_overrides:
+  permission_handler_android: ^13.0.1
